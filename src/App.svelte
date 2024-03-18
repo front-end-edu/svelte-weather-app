@@ -125,7 +125,7 @@
     }
 
     // 사용자 지정 마커 이미지 URL
-    const markerImageUrl = '../svelte_weather_app/marker.png'; // 여기서 이미지 URL을 자신의 것으로 교체하세요.
+    const markerImageUrl = './marker.png'; // 여기서 이미지 URL을 자신의 것으로 교체하세요.
 
     // 새로운 마커 생성
     currentMarker = new naver.maps.Marker({
@@ -160,7 +160,7 @@
     </ul>
   {/if}
   {#if isLoading}
-    <p>날씨 정보를 불러오는 중...</p>
+    <p>날씨 정보를 불러오는 중....</p>
   {:else if errorMessage}
     <p>{errorMessage}</p>
   {:else if weatherData.temperature && weatherData.humidity}
