@@ -1,36 +1,36 @@
 <script>
   import { onMount } from 'svelte';
+  import Chart from 'chart.js/auto';
 
   let map;
-  let weatherData = {};
+  let weatherData = [];
   let isLoading = false;
   let errorMessage = '';
   let searchInput = '';
   let currentAddress = '';
   let currentMarker = null;
   let searchResults = []; // 검색 결과를 저장할 배열로 수정
+  let weatherChart; // 차트 인스턴스를 저장할 변수
 
   async function fetchWeatherData(lat, lon) {
     const API_KEY = '1e657dc0d8ee9f105075aab7719defa8';
     const units = 'metric';
+    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=${units}&appid=${API_KEY}`;
 
-    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=${units}&appid=${API_KEY}`;
     isLoading = true;
     try {
       const response = await fetch(url);
+      if (!response.ok) throw new Error('API 호출에 실패했습니다: ' + response.statusText);
+
       const data = await response.json();
-      if (data.cod === 200) {
-        weatherData = {
-          address: currentAddress,
-          temperature: data.main.temp + '°C',
-          humidity: data.main.humidity + '%',
-          windSpeed: data.wind.speed + ' m/s',
-          clouds: data.clouds.all + '%',
-        };
-      } else {
-        console.error('API 호출에 실패했습니다.', data.message);
-        errorMessage = 'API 호출에 실패했습니다: ' + data.message;
-      }
+      weatherData = data.list.map((forecast) => ({
+        date: new Date(forecast.dt * 1000).toLocaleString(),
+        temperature: forecast.main.temp,
+        humidity: forecast.main.humidity,
+        windSpeed: forecast.wind.speed,
+        clouds: forecast.clouds.all,
+      }));
+      updateWeatherChart();
     } catch (error) {
       console.error('날씨 정보를 불러오는 중 오류가 발생했습니다:', error);
       errorMessage = '날씨 정보를 불러오는 중 오류가 발생했습니다: ' + error.message;
@@ -133,9 +133,12 @@
       map: map,
       icon: {
         content: `<img src="${markerImageUrl}" alt="Marker" style="width: 30px; height: 87.7px;">`, // 마커 이미지와 크기 설정
-        anchor: new naver.maps.Point(15, 43), // 이미지의 중심점 설정. 여기서는 이미지 크기의 절반 값을 사용하여 중앙 아래 지점이 위치 지정점이 되도록 함
+        anchor: new naver.maps.Point(15, 43.85), // 이미지의 중심점 설정. 여기서는 이미지 크기의 절반 값을 사용하여 중앙 아래 지점이 위치 지정점이 되도록 함
       },
     });
+
+    // 마커를 추가한 위치의 날씨 데이터를 가져옵니다.
+    fetchWeatherData(lat, lon); // 함수 이름을 올바르게 수정
   }
 
   // 검색 결과 중 하나를 선택했을 때 실행될 함수
@@ -145,6 +148,86 @@
     addMarker(address.y, address.x);
     fetchWeatherData(address.y, address.x);
     searchResults = []; // 검색 결과 초기화
+  }
+
+  function updateWeatherChart() {
+    const ctx = document.getElementById('weatherChart').getContext('2d');
+    const dates = weatherData.map((data) => data.date.slice(0, 10)); // 날짜 데이터
+    const temperatures = weatherData.map((data) => data.temperature); // 온도 데이터
+    const humidities = weatherData.map((data) => data.humidity); // 습도 데이터
+    const windSpeeds = weatherData.map((data) => data.windSpeed); // 풍속 데이터
+    const clouds = weatherData.map((data) => data.clouds); // 구름양 데이터
+
+    if (weatherChart) {
+      weatherChart.data.labels = dates;
+      weatherChart.data.datasets[0].data = temperatures;
+      weatherChart.data.datasets[1].data = humidities;
+      weatherChart.data.datasets[2].data = windSpeeds;
+      weatherChart.data.datasets[3].data = clouds;
+      weatherChart.update();
+    } else {
+      weatherChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [
+            {
+              label: '온도 (°C)',
+              data: temperatures,
+              borderColor: 'rgb(255, 99, 132)',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              yAxisID: 'y',
+            },
+            {
+              label: '습도 (%)',
+              data: humidities,
+              borderColor: 'rgb(54, 162, 235)',
+              backgroundColor: 'rgba(54, 162, 235, 0.2)',
+              yAxisID: 'y1',
+            },
+            {
+              label: '풍속 (m/s)',
+              data: windSpeeds,
+              borderColor: 'rgb(75, 192, 192)',
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              yAxisID: 'y2',
+            },
+            {
+              label: '구름양 (%)',
+              data: clouds,
+              borderColor: 'rgb(153, 102, 255)',
+              backgroundColor: 'rgba(153, 102, 255, 0.2)',
+              yAxisID: 'y3',
+            },
+          ],
+        },
+        options: {
+          scales: {
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              grid: {
+                drawOnChartArea: false, // 습도의 격자를 오른쪽에 표시하지 않음
+              },
+            },
+            y2: {
+              type: 'linear',
+              display: false, // 풍속의 Y축을 차트에 표시하지 않음
+            },
+            y3: {
+              type: 'linear',
+              display: false, // 구름양의 Y축을 차트에 표시하지 않음
+            },
+          },
+        },
+      });
+    }
   }
 </script>
 
@@ -163,16 +246,49 @@
     <p>날씨 정보를 불러오는 중....</p>
   {:else if errorMessage}
     <p>{errorMessage}</p>
-  {:else if weatherData.temperature && weatherData.humidity}
+  {:else if weatherData.length > 0}
     <div>
       <h2>날씨 정보</h2>
-      <p>주소: {weatherData.address}</p>
-      <p>온도: {weatherData.temperature}</p>
-      <p>습도: {weatherData.humidity}</p>
-      <p>풍속: {weatherData.windSpeed}</p>
-      <p>구름양: {weatherData.clouds}</p>
+      <!-- 당일 날씨 정보 표시 -->
+      <div>
+        <p><strong>당일 날씨:</strong></p>
+        <p>날짜: {weatherData[0].date}</p>
+        <p>주소: {currentAddress}</p>
+        <p>온도: {weatherData[0].temperature}</p>
+        <p>습도: {weatherData[0].humidity}</p>
+        <p>풍속: {weatherData[0].windSpeed}</p>
+        <p>구름양: {weatherData[0].clouds}</p>
+      </div>
+      <!-- 이후 날씨 정보 표 형태로 표시 -->
+      {#if weatherData.length > 1}
+        <table>
+          <thead>
+            <tr>
+              <th>날짜</th>
+              <th>온도</th>
+              <th>습도</th>
+              <th>풍속</th>
+              <th>구름양</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each weatherData.slice(1) as data, index}
+              <tr>
+                <td>{data.date}</td>
+                <td>{data.temperature}</td>
+                <td>{data.humidity}</td>
+                <td>{data.windSpeed}</td>
+                <td>{data.clouds}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
     </div>
   {/if}
+  <div>
+    <canvas id="weatherChart"></canvas>
+  </div>
 </main>
 
 <style>
@@ -184,5 +300,22 @@
 
   #map {
     height: 400px;
+  }
+
+  table {
+    font-size: 12px;
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    text-align: left;
+    padding: 6px 4px;
+    border: 1px solid #ddd;
+  }
+
+  th {
+    background-color: #f2f2f2;
   }
 </style>
